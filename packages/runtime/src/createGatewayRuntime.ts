@@ -16,6 +16,7 @@ import type {
 import {
   handleMaybePromiseMaybeAsyncIterableResult,
   UnifiedGraphManager,
+  wrapExecuteFnForRawForward,
 } from '@graphql-mesh/fusion-runtime';
 import { useHmacUpstreamSignature } from '@graphql-mesh/hmac-upstream-signature';
 import useMeshResponseCache from '@graphql-mesh/plugin-response-cache';
@@ -714,6 +715,7 @@ export function createGatewayRuntime<
       instrumentation: () => instrumentation,
       batch: config.__experimental__batchExecution,
       batchDelegateOptions: config.__experimental__batchDelegateOptions,
+      rawForward: config.__experimental__rawForward,
       subgraphDefer:
         typeof config.deferStream === 'object'
           ? config.deferStream.subgraph
@@ -839,9 +841,12 @@ export function createGatewayRuntime<
         (executor) => {
           const baseExecuteFn = executor
             ? getExecuteFnFromExecutor(executor)
-            : executeFn;
+            : config.__experimental__rawForward
+              ? // the schema is executed by the gateway itself (stitching)
+                wrapExecuteFnForRawForward(executeFn)
+              : executeFn;
           if (!lease) {
-            if (executor) {
+            if (baseExecuteFn !== executeFn) {
               setExecuteFn(baseExecuteFn);
             }
             return undefined;
